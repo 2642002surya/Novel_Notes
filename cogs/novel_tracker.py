@@ -43,14 +43,12 @@ TRACKING_PARAMS = {
     "share", "si", "source", "spm",
 }
 
-# Regex to catch path prefixes like /book/slug, /novel/slug, /series/slug, /read/slug
 NOVEL_SLUG_PATTERN = re.compile(
     r"^/(?:book|novel|series|read)/([a-zA-Z0-9_\-]+)", re.IGNORECASE
 )
 
 
 def _clean_query(query: str) -> str:
-    """Drop tracking parameters but keep identifiers."""
     pairs = [
         (key, value)
         for key, value in parse_qsl(query, keep_blank_values=True)
@@ -61,7 +59,6 @@ def _clean_query(query: str) -> str:
 
 def extract_novel_identity(raw_url: str) -> tuple[str, str, str] | None:
     """
-    Extract novel identity based on the novel slug, while retaining the full clean URL.
     Returns: (novel_slug, identity_key, full_clean_url)
     """
     try:
@@ -87,34 +84,32 @@ def extract_novel_identity(raw_url: str) -> tuple[str, str, str] | None:
         query = _clean_query(parsed.query)
         full_clean_url = urlunsplit((parsed.scheme.lower(), netloc, path, query, ""))
 
-        # Find the novel slug
         match = NOVEL_SLUG_PATTERN.match(path)
         if match:
             slug = match.group(1).lower()
         else:
-            # Fallback for sites where slug is directly off root: e.g. /novel-slug/chapter-1
             parts = [p for p in path.strip("/").split("/") if p]
             slug = parts[0].lower() if parts else ""
 
         if not slug:
             return None
 
-        # Identity key based on host and novel slug so all chapter links match the same novel
         identity_key = f"{hostname}:{slug}"
         return slug, identity_key, full_clean_url
-    except (ValueError, UnicodeError):
+    except Exception:
         return None
 
+
 def normalize_novel_url(raw_url: str) -> tuple[str, str] | None:
-    """Backward compatibility wrapper for other cogs."""
+    """Compatibility wrapper for cogs/library.py."""
     extracted = extract_novel_identity(raw_url)
     if not extracted:
         return None
     _slug, identity_key, full_clean_url = extracted
     return identity_key, full_clean_url
 
+
 def extract_novels(content: str) -> list[tuple[str, str, str]]:
-    """Extracts unique novel links found in message content."""
     found: dict[str, tuple[str, str, str]] = {}
     for match in URL_PATTERN.finditer(content or ""):
         extracted = extract_novel_identity(match.group(0))
@@ -125,19 +120,21 @@ def extract_novels(content: str) -> list[tuple[str, str, str]]:
 
 
 def is_dedicated_novel_channel(channel_name: str, novel_slug: str) -> bool:
-    """Check if the channel name matches the novel name/slug."""
+    """Strict check: only matches if the channel specifically names this novel."""
     def clean(text: str) -> str:
         return re.sub(r"[^a-z0-9]", "", text.lower())
 
     clean_channel = clean(channel_name)
     clean_slug = clean(novel_slug)
-    if not clean_channel or not clean_slug:
+
+    # Avoid matching generic channel names like 'novels', 'general', 'links'
+    if len(clean_channel) < 5 or clean_channel in {"novel", "novels", "links", "general", "bot", "chat"}:
         return False
-    return clean_slug in clean_channel or clean_channel in clean_slug
+
+    return clean_slug == clean_channel or clean_slug in clean_channel
 
 
 def get_alert_channel(guild: discord.Guild) -> discord.TextChannel | None:
-    """Configured alert channel for a guild."""
     channel_id = ALERT_CHANNEL_ID
     if not channel_id:
         configured = os.getenv(f"ALERT_CHANNEL_ID_{guild.id}", "").strip()
@@ -146,20 +143,16 @@ def get_alert_channel(guild: discord.Guild) -> discord.TextChannel | None:
         try:
             channel_id = int(configured)
         except ValueError:
-            logger.warning("Invalid alert channel ID for guild %s", guild.id)
             return None
     channel = guild.get_channel(channel_id)
     return channel if isinstance(channel, discord.TextChannel) else None
 
 
 class DuplicateActionView(discord.ui.View):
-    """Provides navigation links and an interactive deletion button for reposts."""
-
     def __init__(self, target_message: discord.Message, previous_jump: str, full_url: str):
         super().__init__(timeout=86400)
         self.target_message = target_message
 
-        # Direct link button to open the actual novel chapter link
         self.add_item(
             discord.ui.Button(
                 label="Open Link",
@@ -168,7 +161,6 @@ class DuplicateActionView(discord.ui.View):
                 row=0,
             )
         )
-        # Jump buttons
         self.add_item(
             discord.ui.Button(
                 label="Previous Post",
@@ -224,8 +216,6 @@ class DuplicateActionView(discord.ui.View):
 
 
 class NovelTracker(commands.Cog):
-    """Index novel links, find repeats, and search the server's index."""
-
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.service = get_service(bot)
@@ -241,8 +231,6 @@ class NovelTracker(commands.Cog):
     async def cog_unload(self) -> None:
         self._closing = True
         self.scan_guilds.cancel()
-
-    # ------------------------------------------------------------ live checking
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -268,13 +256,12 @@ class NovelTracker(commands.Cog):
             if ctx.valid:
                 return 0
         except Exception:
-            logger.debug("Could not build command context", exc_info=True)
+            pass
 
         await self.database.initialize()
         new_links = 0
 
         for slug, identity, full_url in novels:
-            # If posted in a channel dedicated to this novel, ignore duplicate rules
             if hasattr(message.channel, "name") and is_dedicated_novel_channel(
                 message.channel.name, slug
             ):
@@ -297,8 +284,7 @@ class NovelTracker(commands.Cog):
                     new_links += 1
 
                 existing_id = int(existing.get("message_id") or 0) if existing else 0
-                if inserted and existing is not None and existing_id != message.id:
-                    # Ignore if the older post was originally from that novel's favorite channel
+                if existing is not None and existing_id != message.id:
                     old_channel_id = int(existing.get("channel_id") or 0)
                     old_channel = message.guild.get_channel(old_channel_id)
                     if (
@@ -320,9 +306,7 @@ class NovelTracker(commands.Cog):
                     elif duplicates is not None:
                         duplicates.append((full_url, existing_jump, message.jump_url))
             except Exception:
-                logger.exception(
-                    "Failed to index novel link %s in guild %s", identity, message.guild.id
-                )
+                logger.exception("Failed to process novel link in guild %s", message.guild.id)
         return new_links
 
     def _get_alert_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
@@ -349,16 +333,13 @@ class NovelTracker(commands.Cog):
             return
 
         previous_channel, previous_jump = self._previous_link(guild.id, existing)
-        identity = str(existing.get("identity") or "")
-        meta = (await self.database.get_meta(identity)) if identity else None
-
         title_display = slug.replace("-", " ").title()
 
         embed = discord.Embed(
             title=f"🔁 Duplicate Novel Link: {title_display}",
             description=(
                 f"**Exact Message Link:**\n{full_url}\n\n"
-                "This novel was already shared in another channel."
+                "This novel has already been shared in another channel."
             ),
             color=Colors.WARNING,
             timestamp=discord.utils.utcnow(),
@@ -392,12 +373,8 @@ class NovelTracker(commands.Cog):
                     mention_author=False,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
-        except discord.Forbidden:
-            logger.warning("Cannot send duplicate alerts in guild %s", guild.id)
         except discord.HTTPException:
             logger.exception("Failed to send duplicate alert")
-
-    # ------------------------------------------------------------ scheduled scan
 
     @tasks.loop(hours=24)
     async def scan_guilds(self) -> None:
@@ -418,9 +395,8 @@ class NovelTracker(commands.Cog):
         await self.bot.wait_until_ready()
 
     async def scan_guild(
-        self, guild: discord.Guild, *, report: bool = False
+        self, guild: discord.Guild, *, report: bool = False, force: bool = False
     ) -> dict[str, int]:
-        """Scan readable text channels and threads, ignoring novel-dedicated channels."""
         stats = {"channels": 0, "messages": 0, "new_links": 0, "duplicates": 0}
         async with self._scan_locks[guild.id]:
             await self.database.initialize()
@@ -437,12 +413,16 @@ class NovelTracker(commands.Cog):
                 if not (permissions.view_channel and permissions.read_message_history):
                     continue
                 try:
-                    checkpoint = await self.database.get_checkpoint(
-                        guild_id=guild.id,
-                        channel_id=channel.id,
-                    )
-                    after = discord.Object(id=checkpoint) if checkpoint else None
-                    latest_message_id = checkpoint or 0
+                    after = None
+                    latest_message_id = 0
+                    if not force:
+                        checkpoint = await self.database.get_checkpoint(
+                            guild_id=guild.id,
+                            channel_id=channel.id,
+                        )
+                        after = discord.Object(id=checkpoint) if checkpoint else None
+                        latest_message_id = checkpoint or 0
+
                     processed = 0
                     async for message in channel.history(
                         limit=None,
@@ -464,6 +444,7 @@ class NovelTracker(commands.Cog):
                                 message_id=latest_message_id,
                             )
                             await asyncio.sleep(0)
+
                     if latest_message_id:
                         await self.database.set_checkpoint(
                             guild_id=guild.id,
@@ -497,7 +478,7 @@ class NovelTracker(commands.Cog):
             lines.append(f"[Link]({url}) — [repeat]({newer_jump}) / [first]({first_jump})")
         description = "\n".join(lines)
         if len(duplicates) > 15:
-            description += f"\n...and {len(duplicates) - 15} more. Use `duplicates` to list them."
+            description += f"\n...and {len(duplicates) - 15} more."
         embed = discord.Embed(
             title=f"🔁 Scan found {len(duplicates)} duplicate link(s)",
             description=description[:4000],
@@ -507,56 +488,50 @@ class NovelTracker(commands.Cog):
         try:
             await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
         except discord.HTTPException:
-            logger.exception("Failed to send scan report")
-
-    # ------------------------------------------------------------------ commands
+            pass
 
     @commands.command(name="novelscan", aliases=["scan"])
     @commands.guild_only()
     @commands.has_guild_permissions(manage_guild=True)
-    @commands.cooldown(1, 60, commands.BucketType.guild)
-    async def manual_scan(self, ctx: commands.Context) -> None:
-        """Run a scan of the whole server now."""
+    async def manual_scan(self, ctx: commands.Context, *, flags: str = "") -> None:
+        """Run a server scan. Use `novelscan force` to bypass checkpoints and re-read all messages."""
         if ctx.guild is None:
             return
         if self._scan_locks[ctx.guild.id].locked():
             await ctx.send(embed=info_embed("A scan is already running for this server."))
             return
+
+        force_scan = "force" in flags.lower()
+        mode_text = " (Full Force Scan)" if force_scan else ""
+
         status = await ctx.send(
             embed=info_embed(
-                f"Scanning accessible text channels in **{ctx.guild.name}**…",
+                f"Scanning channels in **{ctx.guild.name}**{mode_text}…",
                 title="🔎 Scan started",
             )
         )
         try:
-            stats = await self.scan_guild(ctx.guild, report=True)
-            embed = success_embed(
-                "Indexing finished.",
-                title="Scan complete",
-            )
+            stats = await self.scan_guild(ctx.guild, report=True, force=force_scan)
+            embed = success_embed("Indexing finished.", title="Scan complete")
             embed.add_field(name="📨 Messages read", value=f"{stats['messages']:,}", inline=True)
             embed.add_field(name="📂 Channels", value=f"{stats['channels']}", inline=True)
             embed.add_field(name="🔗 Links indexed", value=f"{stats['new_links']:,}", inline=True)
             embed.add_field(name="🔁 Duplicates found", value=f"{stats['duplicates']}", inline=True)
             await status.edit(embed=embed)
         except Exception:
-            logger.exception("Manual scan failed for guild %s", ctx.guild.id)
-            await status.edit(
-                embed=error_embed("The scan failed. Check the bot logs for details.", title="Scan failed")
-            )
+            logger.exception("Manual scan failed")
+            await status.edit(embed=error_embed("Scan failed. Check bot logs."))
 
     @commands.command(name="duplicates", aliases=["dupes"])
     @commands.guild_only()
     async def list_duplicates(self, ctx: commands.Context) -> None:
-        """Browse the most repeated novel links in this server."""
         if ctx.guild is None:
             return
         try:
             rows = await self.database.find_duplicates(guild_id=ctx.guild.id, limit=100)
             entries = await self.service.decorate(rows)
         except Exception:
-            logger.exception("Duplicate lookup failed for guild %s", ctx.guild.id)
-            await ctx.send(embed=error_embed("Could not load duplicates. Please try again later."))
+            await ctx.send(embed=error_embed("Could not load duplicates."))
             return
         if not entries:
             await ctx.send(embed=info_embed("No duplicate novel links have been found.", title="🔁 Duplicates"))
@@ -577,15 +552,11 @@ class NovelTracker(commands.Cog):
     @commands.command(name="novelsearch", aliases=["searchnovel", "findnovel"])
     @commands.guild_only()
     async def search_novels(self, ctx: commands.Context, *, query: str) -> None:
-        """Search indexed novel links by title or URL fragment."""
         if ctx.guild is None:
             return
         query = query.strip()
         if not query:
             await ctx.send(embed=error_embed("Enter a title or URL fragment to search for."))
-            return
-        if len(query) > 100:
-            await ctx.send(embed=error_embed("Search terms must be 100 characters or fewer."))
             return
         try:
             results = await self.database.search_novels(
@@ -595,8 +566,7 @@ class NovelTracker(commands.Cog):
             )
             entries = await self.service.decorate(results)
         except Exception:
-            logger.exception("Novel search failed for guild %s", ctx.guild.id)
-            await ctx.send(embed=error_embed("Search failed. Please try again later."))
+            await ctx.send(embed=error_embed("Search failed."))
             return
         if not entries:
             await ctx.send(
