@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
+# Imported after load_dotenv so modules that read env vars at import time see them.
+from novelbot.embeds import error_embed  # noqa: E402
+
 NON_COG_FILES = {"__init__.py", "novel_database.py"}
 PREFIX = os.getenv("COMMAND_PREFIX", "i novel ") or "i novel "
 if PREFIX[-1].isalnum():
@@ -77,6 +80,12 @@ class NovelBot(commands.Bot):
             except Exception:
                 logger.exception("Failed to load extension %s", extension)
 
+    async def close(self) -> None:
+        service = getattr(self, "novel_service", None)
+        if service is not None:
+            await service.close()  # releases the shared HTTP session
+        await super().close()
+
     async def on_ready(self) -> None:
         logger.info(
             "Logged in as %s (%s) in %d server(s)",
@@ -110,7 +119,7 @@ class NovelBot(commands.Bot):
             message = "Something went wrong. Check the bot logs."
 
         try:
-            await ctx.send(message)
+            await ctx.send(embed=error_embed(message))
         except discord.HTTPException:
             # e.g. the bot may not be allowed to speak in this channel.
             logger.warning("Could not send error message in channel %s", ctx.channel.id)

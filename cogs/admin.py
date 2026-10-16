@@ -8,6 +8,8 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
+from novelbot.embeds import Colors
+
 logger = logging.getLogger(__name__)
 
 NON_COG_FILES = {"__init__.py", "novel_database.py"}
@@ -100,7 +102,7 @@ class Admin(commands.Cog):
 
         embed = discord.Embed(
             title="Bot Extensions",
-            color=discord.Color.blurple(),
+            color=Colors.INFO,
         )
 
         lines = []
@@ -249,7 +251,7 @@ class Admin(commands.Cog):
         embed = discord.Embed(
             title="Extension Reload Results",
             description=description,
-            color=discord.Color.blurple(),
+            color=Colors.INFO,
         )
         await ctx.send(embed=embed)
 

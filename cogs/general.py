@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 import discord
 from discord.ext import commands
 
+from novelbot.embeds import Colors
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +26,7 @@ class General(commands.Cog):
                 "A Discord bot for tracking, indexing, and searching "
                 "novel links shared across your server."
             ),
-            color=discord.Color.blurple(),
+            color=Colors.INFO,
             timestamp=discord.utils.utcnow(),
         )
 
@@ -101,7 +103,7 @@ class General(commands.Cog):
 
         embed = discord.Embed(
             title=f"{guild.name}",
-            color=discord.Color.blurple(),
+            color=Colors.INFO,
             timestamp=discord.utils.utcnow(),
         )
 
@@ -175,7 +177,7 @@ class General(commands.Cog):
 
         embed = discord.Embed(
             title=f"User Information: {target}",
-            color=discord.Color.blurple(),
+            color=Colors.INFO,
             timestamp=discord.utils.utcnow(),
         )
         embed.set_thumbnail(url=target.display_avatar.url)
@@ -253,7 +255,7 @@ class General(commands.Cog):
 
         embed = discord.Embed(
             title=f"{target.display_name if isinstance(target, discord.Member) else target.name}'s Avatar",
-            color=discord.Color.blurple(),
+            color=Colors.INFO,
         )
         embed.set_image(url=target.display_avatar.with_size(1024).url)
         embed.add_field(

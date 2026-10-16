@@ -6,9 +6,11 @@ import logging
 import discord
 from discord.ext import commands
 
+from novelbot.embeds import Colors, error_embed
+
 logger = logging.getLogger("NovelGuard.Help")
 
-COLOR = discord.Color.blurple()
+COLOR = Colors.INFO
 VIEW_TIMEOUT = 90
 MAX_OPTIONS = 25
 
@@ -30,6 +32,12 @@ class HelpCategorySelect(discord.ui.Select):
                 value="novel_tracker",
                 description="Novel indexing, duplicate detection, and search.",
                 emoji="📖",
+            ),
+            discord.SelectOption(
+                label="Library & Tracking",
+                value="library",
+                description="Track novels, browse your library, release alerts.",
+                emoji="📚",
             ),
             discord.SelectOption(
                 label="Cleaner",
@@ -94,6 +102,7 @@ class HelpView(discord.ui.View):
     def _command_categories(self) -> dict[str, list[commands.Command]]:
         categories: dict[str, list[commands.Command]] = {
             "novel_tracker": [],
+            "library": [],
             "cleaner": [],
             "admin": [],
             "general": [],
@@ -109,7 +118,9 @@ class HelpView(discord.ui.View):
                 else ""
             )
 
-            if "noveltracker" in cog_name or "novel_tracker" in cog_name:
+            if "novellibrary" in cog_name:
+                categories["library"].append(command)
+            elif "noveltracker" in cog_name or "novel_tracker" in cog_name:
                 categories["novel_tracker"].append(command)
             elif "cleaner" in cog_name:
                 categories["cleaner"].append(command)
@@ -149,6 +160,7 @@ class HelpView(discord.ui.View):
             selected = categories.get(category, [])
             title = {
                 "novel_tracker": "Novel Tracker Commands",
+                "library": "Library & Tracking Commands",
                 "cleaner": "Cleaner Commands",
                 "admin": "Administration Commands",
                 "general": "General Commands",
@@ -257,7 +269,9 @@ class Help(commands.Cog):
 
         if command is None or command.hidden:
             await ctx.reply(
-                "Command not found. Use `i novel help` to browse commands.",
+                embed=error_embed(
+                    "Use `i novel help` to browse commands.", title="Command not found"
+                ),
                 mention_author=False,
             )
             return
