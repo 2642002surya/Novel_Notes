@@ -105,6 +105,13 @@ def extract_novel_identity(raw_url: str) -> tuple[str, str, str] | None:
     except (ValueError, UnicodeError):
         return None
 
+def normalize_novel_url(raw_url: str) -> tuple[str, str] | None:
+    """Backward compatibility wrapper for other cogs."""
+    extracted = extract_novel_identity(raw_url)
+    if not extracted:
+        return None
+    _slug, identity_key, full_clean_url = extracted
+    return identity_key, full_clean_url
 
 def extract_novels(content: str) -> list[tuple[str, str, str]]:
     """Extracts unique novel links found in message content."""
