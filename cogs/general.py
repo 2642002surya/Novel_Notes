@@ -1,274 +1,140 @@
-from __future__ import annotations
-
-import logging
-from datetime import datetime, timezone
-
+import datetime
+import time
 import discord
 from discord.ext import commands
 
-from novelbot.embeds import Colors
+COLOR_PRIMARY = discord.Color.from_rgb(88, 101, 242)
+COLOR_SUCCESS = discord.Color.from_rgb(87, 242, 135)
+COLOR_WARNING = discord.Color.from_rgb(254, 231, 92)
 
-logger = logging.getLogger(__name__)
+class DynamicHelpSelect(discord.ui.Select):
+    """Dropdown menu to switch documentation categories seamlessly."""
+    def __init__(self, bot: commands.Bot, ctx: commands.Context):
+        self.bot = bot
+        self.ctx = ctx
+        options = []
+        for name, cog in bot.cogs.items():
+            cmds = [c for c in cog.get_commands() if not c.hidden]
+            if cmds:
+                options.append(discord.SelectOption(
+                    label=name,
+                    description=f"{len(cmds)} commands available",
+                    emoji="📂"
+                ))
 
+        super().__init__(
+            placeholder="Select a category to view commands...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
 
-class General(commands.Cog):
-    """General bot and server information commands."""
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("Only the command runner can change this view.", ephemeral=True)
+
+        selected_cog_name = self.values[0]
+        cog = self.bot.get_cog(selected_cog_name)
+        if not cog:
+            return await interaction.response.send_message("Category not found.", ephemeral=True)
+
+        embed = discord.Embed(
+            title=f"📂 Category: {selected_cog_name}",
+            description=cog.description or "No category description.",
+            color=COLOR_PRIMARY,
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
+        )
+        embed.set_footer(text=f"Requested by {self.ctx.author}", icon_url=self.ctx.author.display_avatar.url)
+
+        for cmd in cog.get_commands():
+            if cmd.hidden:
+                continue
+            sig = f"{self.ctx.prefix}{cmd.name} {cmd.signature}".strip()
+            desc = cmd.short_doc or "No details."
+            aliases = f"\n*Aliases:* `{', '.join(cmd.aliases)}`" if cmd.aliases else ""
+            embed.add_field(name=f"`{sig}`", value=f"{desc}{aliases}", inline=False)
+
+        await interaction.response.edit_message(embed=embed)
+
+class HelpView(discord.ui.View):
+    def __init__(self, bot: commands.Bot, ctx: commands.Context):
+        super().__init__(timeout=180)
+        self.add_item(DynamicHelpSelect(bot, ctx))
+
+class General(commands.Cog, name="General & Administration"):
+    """Core utilities, latency telemetry, and channel management."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.uptime_start = time.time()
 
-    @commands.command(name="botinfo", aliases=["bot", "about"])
-    async def about_bot(self, ctx: commands.Context):
-        """Display information about the bot."""
+    @commands.command(name="ping")
+    async def ping(self, ctx: commands.Context):
+        """Checks gateway connection latency and HTTP roundtrip."""
+        t_start = time.monotonic()
+        msg = await ctx.reply("📡 Measuring socket connection...", mention_author=False)
+        t_end = time.monotonic()
+
+        http_latency = round((t_end - t_start) * 1000)
+        ws_latency = round(self.bot.latency * 1000)
+
         embed = discord.Embed(
-            title="Novel Checking Bot",
+            title="⚡ Network Performance",
+            color=COLOR_SUCCESS if ws_latency < 160 else COLOR_WARNING,
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
+        )
+        embed.add_field(name="WebSocket Heartbeat", value=f"```fix\n{ws_latency} ms\n```", inline=True)
+        embed.add_field(name="HTTP Roundtrip", value=f"```fix\n{http_latency} ms\n```", inline=True)
+        uptime_delta = str(datetime.timedelta(seconds=int(time.time() - self.uptime_start)))
+        embed.add_field(name="Bot Uptime", value=f"```yaml\n{uptime_delta}\n```", inline=False)
+        embed.set_footer(text="Novel Sentinel Telemetry", icon_url=self.bot.user.display_avatar.url)
+
+        await msg.edit(content=None, embed=embed)
+
+    @commands.command(name="purge", aliases=["clean"])
+    @commands.has_permissions(manage_messages=True)
+    @commands.bot_has_permissions(manage_messages=True)
+    async def purge(self, ctx: commands.Context, limit: int = 50):
+        """Purges recent messages in current channel with instant visual confirmation."""
+        if limit < 1 or limit > 500:
+            return await ctx.reply("⚠️ Specify an amount between 1 and 500.", mention_author=False)
+
+        await ctx.message.delete()
+        deleted = await ctx.channel.purge(limit=limit)
+
+        embed = discord.Embed(
+            title="🧹 Channel Cleanup Complete",
+            description=f"Successfully wiped **{len(deleted)}** messages from {ctx.channel.mention}.",
+            color=COLOR_SUCCESS
+        )
+        embed.set_footer(text="This notification will auto-delete in 5 seconds.")
+        notif = await ctx.send(embed=embed)
+        await notif.delete(delay=5)
+
+    @commands.command(name="help")
+    async def help(self, ctx: commands.Context):
+        """Displays interactive command center and cog architecture overview."""
+        embed = discord.Embed(
+            title="📖 Novel Sentinel • Command Center",
             description=(
-                "A Discord bot for tracking, indexing, and searching "
-                "novel links shared across your server."
+                f"Prefix: `{ctx.prefix}`\n\n"
+                "Welcome to the production novel moderation suite. Select a category below "
+                "to inspect commands, signatures, and documentation.\n"
+                "────────────────────────────────────────────"
             ),
-            color=Colors.INFO,
-            timestamp=discord.utils.utcnow(),
-        )
-
-        if self.bot.user:
-            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-            embed.add_field(
-                name="Bot Account",
-                value=f"{self.bot.user.mention}\n`{self.bot.user.id}`",
-                inline=True,
-            )
-
-        embed.add_field(
-            name="Library",
-            value=f"`discord.py {discord.__version__}`",
-            inline=True,
+            color=COLOR_PRIMARY,
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
         embed.add_field(
-            name="Servers",
-            value=f"`{len(self.bot.guilds):,}`",
-            inline=True,
+            name="Available Modules",
+            value="• **General & Administration**: Ping, Purge, Help\n• **Novel Scanner**: Scan, Deduplication, Link Management",
+            inline=False
         )
-        embed.add_field(
-            name="Commands",
-            value=f"`{len(self.bot.commands):,}`",
-            inline=True,
-        )
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Use the dropdown menu to jump into detailed views.")
 
-        latency = getattr(self.bot, "latency", None)
-        if latency is not None:
-            embed.add_field(
-                name="Gateway Latency",
-                value=f"`{latency * 1000:.0f} ms`",
-                inline=True,
-            )
-
-        started_at = getattr(self.bot, "started_at", None)
-        if started_at:
-            if started_at.tzinfo is None:
-                started_at = started_at.replace(tzinfo=timezone.utc)
-
-            uptime_seconds = max(
-                0,
-                int((discord.utils.utcnow() - started_at).total_seconds()),
-            )
-            days, remainder = divmod(uptime_seconds, 86400)
-            hours, remainder = divmod(remainder, 3600)
-            minutes, seconds = divmod(remainder, 60)
-
-            parts = []
-            if days:
-                parts.append(f"{days}d")
-            if hours:
-                parts.append(f"{hours}h")
-            if minutes:
-                parts.append(f"{minutes}m")
-            parts.append(f"{seconds}s")
-
-            embed.add_field(
-                name="Uptime",
-                value=f"`{' '.join(parts)}`",
-                inline=True,
-            )
-
-        embed.set_footer(text="Novel Checking Bot")
-        await ctx.send(embed=embed)
-
-    @commands.command(name="serverinfo", aliases=["server", "guildinfo"])
-    @commands.guild_only()
-    async def server_info(self, ctx: commands.Context):
-        """Display information about the current server."""
-        guild = ctx.guild
-        if guild is None:
-            return
-
-        embed = discord.Embed(
-            title=f"{guild.name}",
-            color=Colors.INFO,
-            timestamp=discord.utils.utcnow(),
-        )
-
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
-
-        embed.add_field(
-            name="Server ID",
-            value=f"`{guild.id}`",
-            inline=True,
-        )
-        embed.add_field(
-            name="Owner",
-            value=f"<@{guild.owner_id}>",
-            inline=True,
-        )
-        embed.add_field(
-            name="Created",
-            value=discord.utils.format_dt(guild.created_at, style="D"),
-            inline=True,
-        )
-
-        if guild.member_count is not None:
-            embed.add_field(
-                name="Members",
-                value=f"`{guild.member_count:,}`",
-                inline=True,
-            )
-
-        embed.add_field(
-            name="Text Channels",
-            value=f"`{len(guild.text_channels):,}`",
-            inline=True,
-        )
-        embed.add_field(
-            name="Voice Channels",
-            value=f"`{len(guild.voice_channels):,}`",
-            inline=True,
-        )
-        embed.add_field(
-            name="Categories",
-            value=f"`{len(guild.categories):,}`",
-            inline=True,
-        )
-        embed.add_field(
-            name="Roles",
-            value=f"`{len(guild.roles):,}`",
-            inline=True,
-        )
-        embed.add_field(
-            name="Boost Level",
-            value=f"`{guild.premium_tier}`",
-            inline=True,
-        )
-
-        if guild.description:
-            embed.description = guild.description[:4000]
-
-        embed.set_footer(text=f"Server ID: {guild.id}")
-        await ctx.send(embed=embed)
-
-    @commands.command(name="userinfo", aliases=["user", "whois"])
-    async def user_info(
-        self,
-        ctx: commands.Context,
-        *,
-        member: discord.Member | discord.User | None = None,
-    ):
-        """Display information about a user."""
-        target = member or ctx.author
-
-        embed = discord.Embed(
-            title=f"User Information: {target}",
-            color=Colors.INFO,
-            timestamp=discord.utils.utcnow(),
-        )
-        embed.set_thumbnail(url=target.display_avatar.url)
-
-        embed.add_field(
-            name="Username",
-            value=str(target),
-            inline=True,
-        )
-        embed.add_field(
-            name="User ID",
-            value=f"`{target.id}`",
-            inline=True,
-        )
-        embed.add_field(
-            name="Account Created",
-            value=discord.utils.format_dt(target.created_at, style="F"),
-            inline=False,
-        )
-
-        if isinstance(target, discord.Member):
-            embed.add_field(
-                name="Joined Server",
-                value=(
-                    discord.utils.format_dt(target.joined_at, style="F")
-                    if target.joined_at
-                    else "Unknown"
-                ),
-                inline=False,
-            )
-
-            roles = [
-                role.mention
-                for role in reversed(target.roles)
-                if role != ctx.guild.default_role
-            ] if ctx.guild else []
-
-            role_text = ", ".join(roles)
-            if len(role_text) > 1000:
-                role_text = role_text[:997] + "..."
-
-            embed.add_field(
-                name=f"Roles ({len(roles)})",
-                value=role_text or "No roles",
-                inline=False,
-            )
-
-            if target.guild_permissions.administrator:
-                status = "Administrator"
-            elif target.guild_permissions.manage_guild:
-                status = "Server Manager"
-            elif target.guild_permissions.manage_messages:
-                status = "Message Moderator"
-            else:
-                status = "Member"
-
-            embed.add_field(
-                name="Server Permissions",
-                value=status,
-                inline=True,
-            )
-
-        embed.set_footer(text=f"Requested by {ctx.author}")
-        await ctx.send(embed=embed)
-
-    @commands.command(name="avatar", aliases=["pfp", "av"])
-    async def avatar(
-        self,
-        ctx: commands.Context,
-        *,
-        member: discord.Member | discord.User | None = None,
-    ):
-        """Display a user's avatar."""
-        target = member or ctx.author
-
-        embed = discord.Embed(
-            title=f"{target.display_name if isinstance(target, discord.Member) else target.name}'s Avatar",
-            color=Colors.INFO,
-        )
-        embed.set_image(url=target.display_avatar.with_size(1024).url)
-        embed.add_field(
-            name="Links",
-            value=(
-                f"[PNG]({target.display_avatar.with_format('png').url}) · "
-                f"[WebP]({target.display_avatar.with_format('webp').url})"
-            ),
-            inline=False,
-        )
-
-        await ctx.send(embed=embed)
-
+        view = HelpView(self.bot, ctx)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(General(bot))

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Celestial Sentinel</title>
+    <link rel="stylesheet" href="/static/style.css?v=2.1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar" aria-label="Main Navigation">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <span class="brand-crest" aria-hidden="true">🌌</span>
+                    <div class="brand-meta">
+                        <h2>Celestial Sentinel</h2>
+                        <span class="badge badge-accent">Sovereign Edition</span>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">CORE LIBRARY</div>
+                <a href="#overview" class="nav-item active" data-view="overview">
+                    <span class="nav-icon" aria-hidden="true">📊</span>
+                    <span class="nav-label">Overview Analytics</span>
+                </a>
+                <a href="#inventory" class="nav-item" data-view="inventory">
+                    <span class="nav-icon" aria-hidden="true">📚</span>
+                    <span class="nav-label">Master Inventory</span>
+                </a>
+
+                <div class="nav-section-title">CELESTIAL REALMS</div>
+                <a href="#daily" class="nav-item" data-filter-status="Currently Reading" data-filter-theme="ALL">
+                    <span class="nav-icon" aria-hidden="true">⚡</span>
+                    <span class="nav-label">Daily Chapter Realm</span>
+                </a>
+                <a href="#crimson" class="nav-item" data-filter-status="Currently Reading" data-filter-theme="R-18 / Smut">
+                    <span class="nav-icon" aria-hidden="true">🔞</span>
+                    <span class="nav-label">Crimson Realm (LST)</span>
+                </a>
+                <a href="#moodbound" class="nav-item" data-filter-status="Moodbound" data-filter-theme="ALL">
+                    <span class="nav-icon" aria-hidden="true">🌙</span>
+                    <span class="nav-label">The Moodbound Realm</span>
+                </a>
+                <a href="#harem" class="nav-item" data-filter-status="Moodbound" data-filter-theme="Harem">
+                    <span class="nav-icon" aria-hidden="true">👑</span>
+                    <span class="nav-label">The Harem Imperium</span>
+                </a>
+                <a href="#golden" class="nav-item" data-filter-status="Moodbound" data-filter-theme="Rich Protagonist">
+                    <span class="nav-icon" aria-hidden="true">💰</span>
+                    <span class="nav-label">The Golden Dynasty</span>
+                </a>
+                <a href="#queue" class="nav-item" data-filter-status="Plan to Read" data-filter-theme="ALL">
+                    <span class="nav-icon" aria-hidden="true">⏳</span>
+                    <span class="nav-label">The Heavenly Queue</span>
+                </a>
+                <a href="#completed" class="nav-item" data-filter-status="Already Read" data-filter-theme="ALL">
+                    <span class="nav-icon" aria-hidden="true">🏆</span>
+                    <span class="nav-label">Ascended Legends</span>
+                </a>
+                <a href="#favorites" class="nav-item" data-filter-fav="1">
+                    <span class="nav-icon" aria-hidden="true">🌌</span>
+                    <span class="nav-label">Immortal Treasury</span>
+                </a>
+
+                <div class="nav-section-title">AUTOMATION</div>
+                <a href="#builder" class="nav-item" data-view="builder">
+                    <span class="nav-icon" aria-hidden="true">⚙️</span>
+                    <span class="nav-label">Provisioning Studio</span>
+                </a>
+                <a href="/logout" class="nav-item nav-logout">
+                    <span class="nav-icon" aria-hidden="true">🚪</span>
+                    <span class="nav-label">Sovereign Sign Out</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Shell -->
+        <div class="main-shell">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="btn-icon" id="sidebarToggle" aria-label="Toggle Sidebar navigation">☰</button>
+                    <nav class="breadcrumbs" aria-label="Breadcrumb">
+                        <span class="crumb-root">Celestial Archive</span>
+                        <span class="crumb-separator" aria-hidden="true">/</span>
+                        <span class="crumb-current" id="currentViewTitle">Master Inventory</span>
+                    </nav>
+                </div>
+
+                <div class="topbar-right">
+                    <button class="btn btn-secondary btn-sm" id="themeToggleBtn" onclick="toggleTheme()">🌓 Theme</button>
+                    <button class="btn btn-accent btn-sm" onclick="navigateToBuilder()">Provision Server</button>
+                </div>
+            </header>
+
+            <main class="content-body" id="mainContent">
+                <!-- VIEW 1: Overview Analytics -->
+                <section class="view-panel" id="overviewPanel" aria-labelledby="overviewHeading" style="display: none;">
+                    <div class="panel-header">
+                        <h2 id="overviewHeading">Archive Operational Overview</h2>
+                        <p class="subtitle">Direct metrics aggregated from persistent SQLite storage</p>
+                    </div>
+
+                    <div class="stats-grid">
+                        <article class="stat-card" onclick="filterByQuickScope('ALL')" tabindex="0">
+                            <div class="stat-icon-wrap" aria-hidden="true">📚</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Series</span>
+                                <span class="stat-value" id="statTotalNovels">{{ stats.total_novels }}</span>
+                            </div>
+                        </article>
+
+                        <article class="stat-card" onclick="filterByQuickScope('ALL')" tabindex="0">
+                            <div class="stat-icon-wrap" aria-hidden="true">🔗</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Discovered URLs</span>
+                                <span class="stat-value" id="statTotalLinks">{{ stats.total_links }}</span>
+                            </div>
+                        </article>
+
+                        <article class="stat-card" onclick="filterByQuickScope('classified')" tabindex="0">
+                            <div class="stat-icon-wrap stat-success" aria-hidden="true">✓</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Classified</span>
+                                <span class="stat-value success" id="statClassified">{{ stats.classified }}</span>
+                            </div>
+                        </article>
+
+                        <article class="stat-card" onclick="filterByQuickScope('unclassified')" tabindex="0">
+                            <div class="stat-icon-wrap stat-warning" aria-hidden="true">⏳</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Unclassified</span>
+                                <span class="stat-value warning" id="statUnclassified">{{ stats.unclassified }}</span>
+                            </div>
+                        </article>
+
+                        <article class="stat-card" onclick="filterByQuickScope('completed')" tabindex="0">
+                            <div class="stat-icon-wrap stat-primary" aria-hidden="true">🏆</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Ascended Legends</span>
+                                <span class="stat-value primary" id="statCompleted">{{ stats.completed }}</span>
+                            </div>
+                        </article>
+
+                        <article class="stat-card" onclick="filterByQuickScope('favorites')" tabindex="0">
+                            <div class="stat-icon-wrap stat-favorite" aria-hidden="true">🌌</div>
+                            <div class="stat-info">
+                                <span class="stat-label">Immortal Treasury</span>
+                                <span class="stat-value favorite" id="statFavorites">{{ stats.favorites }}</span>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <!-- VIEW 2: Master Inventory & Classification -->
+                <section class="view-panel" id="inventoryPanel" aria-labelledby="inventoryHeading">
+                    <div class="toolbar-card">
+                        <div class="search-box">
+                            <span class="search-icon" aria-hidden="true">🔍</span>
+                            <input 
+                                type="text" 
+                                id="searchInput" 
+                                class="form-control"
+                                placeholder="Search by title, slug, or original URL (Press '/' to focus)..." 
+                                oninput="debounceSearch()"
+                                aria-label="Search archive novels"
+                            >
+                            <button class="btn-clear-search" id="clearSearchBtn" onclick="clearSearch()" aria-label="Clear search text">✕</button>
+                        </div>
+
+                        <div class="filters-wrap">
+                            <select id="filterReadingStatus" class="form-select" onchange="applyFilters()" aria-label="Filter by reading status">
+                                <option value="ALL">All Reading Statuses</option>
+                                <option value="Currently Reading">Currently Reading</option>
+                                <option value="Moodbound">Moodbound</option>
+                                <option value="Plan to Read">Plan to Read</option>
+                                <option value="Already Read">Already Read (Completed)</option>
+                                <option value="Unassigned">Unassigned / Review</option>
+                            </select>
+
+                            <select id="filterTheme" class="form-select" onchange="applyFilters()" aria-label="Filter by theme">
+                                <option value="ALL">All Themes</option>
+                                <option value="R-18 / Smut">R-18 / Smut</option>
+                                <option value="Harem">Harem</option>
+                                <option value="Rich Protagonist">Rich Protagonist</option>
+                                <option value="Fast Cultivation">Fast Cultivation</option>
+                                <option value="Romance">Romance</option>
+                                <option value="System / Cheat">System / Cheat</option>
+                                <option value="Normal / Other">Normal / Other</option>
+                            </select>
+
+                            <select id="filterDomain" class="form-select" onchange="applyFilters()" aria-label="Filter by domain">
+                                <option value="ALL">All Domains</option>
+                                <option value="novelbin">NovelBin</option>
+                                <option value="novelarrow">NovelArrow</option>
+                                <option value="novelping">NovelPing</option>
+                            </select>
+
+                            <div class="layout-toggle" role="group" aria-label="Layout Selection">
+                                <button class="btn-icon active" id="btnLayoutTable" onclick="setLayout('table')" title="Table View" aria-pressed="true">📑</button>
+                                <button class="btn-icon" id="btnLayoutCards" onclick="setLayout('cards')" title="Card View" aria-pressed="false">🗂️</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Actions Toolbar -->
+                    <div class="bulk-toolbar" id="bulkBar" style="display: none;" role="region" aria-label="Bulk Actions">
+                        <div class="bulk-left">
+                            <span class="bulk-count" id="selectedCountText">0 selected</span>
+                        </div>
+                        <div class="bulk-right">
+                            <select id="bulkReadingStatus" class="form-select form-select-sm" aria-label="Bulk reading status">
+                                <option value="Currently Reading">Currently Reading</option>
+                                <option value="Moodbound">Moodbound</option>
+                                <option value="Plan to Read">Plan to Read</option>
+                                <option value="Already Read">Already Read</option>
+                            </select>
+
+                            <select id="bulkTheme" class="form-select form-select-sm" aria-label="Bulk theme">
+                                <option value="R-18 / Smut">R-18 / Smut</option>
+                                <option value="Harem">Harem</option>
+                                <option value="Rich Protagonist">Rich Protagonist</option>
+                                <option value="Fast Cultivation">Fast Cultivation</option>
+                                <option value="Romance">Romance</option>
+                                <option value="System / Cheat">System / Cheat</option>
+                                <option value="Normal / Other">Normal / Other</option>
+                            </select>
+
+                            <button class="btn btn-accent btn-sm" onclick="submitBulkClassification()">Apply Bulk</button>
+                            <button class="btn btn-secondary btn-sm" onclick="clearSelection()">Cancel</button>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Results Area -->
+                    <div id="resultsContainer" role="region" aria-live="polite">
+                        <div class="loading-state">
+                            <div class="spinner" aria-hidden="true"></div>
+                            <p>Querying Celestial Archives...</p>
+                        </div>
+                    </div>
+
+                    <!-- Pagination -->
+                    <footer class="pagination-footer">
+                        <div class="pagination-meta">
+                            <span id="resultsCount">Showing 0 records</span>
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="btn btn-secondary btn-sm" id="prevBtn" onclick="prevPage()" disabled>◀ Previous</button>
+                            <span class="page-indicator" id="pageIndicator">Page 1</span>
+                            <button class="btn btn-secondary btn-sm" id="nextBtn" onclick="nextPage()" disabled>Next ▶</button>
+                        </div>
+                    </footer>
+                </section>
+
+                <!-- VIEW 3: Server Provisioning Studio -->
+                <section class="view-panel" id="builderPanel" aria-labelledby="builderHeading" style="display: none;">
+                    <div class="panel-header">
+                        <h2 id="builderHeading">Discord Provisioning Studio</h2>
+                        <p class="subtitle">Additive, Idempotent Provisioning Engine for Server ID: <code>1560935178879373396</code>[cite: 12]</p>
+                    </div>
+
+                    <div class="studio-card">
+                        <div class="studio-step">
+                            <h3>1. Destination Server Capacity Preflight</h3>
+                            <p>Queries Discord API limits (500 channels / 50 per category) and maps planned collections[cite: 1, 12].</p>
+                            <button class="btn btn-primary" onclick="runPreflightCheck()">Run Live Capacity Audit</button>
+
+                            <div id="preflightResults" style="display: none; margin-top: 16px;"></div>
+                        </div>
+
+                        <hr class="separator">
+
+                        <div class="studio-step">
+                            <h3>2. Destination Category &amp; Channel Preview</h3>
+                            <div class="realm-preview-grid">
+                                <div class="realm-preview-card">
+                                    <h4>📌 The Archive Gates</h4>
+                                    <p>Management index, guide, announcements, and unclassified scrolls[cite: 12].</p>
+                                </div>
+                                <div class="realm-preview-card">
+                                    <h4>⚡ Daily Chapter Realm</h4>
+                                    <p>Individual channel per distinct active daily series[cite: 12].</p>
+                                </div>
+                                <div class="realm-preview-card">
+                                    <h4>🔞 Crimson Chapter Realm</h4>
+                                    <p>Individual channel per distinct smut series (LST)[cite: 12].</p>
+                                </div>
+                                <div class="realm-preview-card">
+                                    <h4>🌙 The Moodbound Realm</h4>
+                                    <p>Grouped collections for mood-based reads[cite: 12].</p>
+                                </div>
+                                <div class="realm-preview-card">
+                                    <h4>⏳ The Heavenly Queue</h4>
+                                    <p>Combined In-Queue &amp; To-Read pending novels[cite: 12].</p>
+                                </div>
+                                <div class="realm-preview-card">
+                                    <h4>🏆 Hall of Ascended Legends</h4>
+                                    <p>6 Batched Completed novel collections[cite: 12].</p>
+                                </div>
+                                <div class="realm-preview-card">
+                                    <h4>🌌 The Immortal Treasury</h4>
+                                    <p>Dedicated channels for Long Novel favorites[cite: 12].</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Edit Drawer -->
+    <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeEditDrawer()" aria-hidden="true"></div>
+    <aside class="edit-drawer" id="editDrawer" aria-label="Novel Editor" role="dialog" aria-modal="true">
+        <div class="drawer-header">
+            <h3>Modify Novel Entry</h3>
+            <button class="btn-icon" onclick="closeEditDrawer()" aria-label="Close editor">✕</button>
+        </div>
+
+        <form id="editNovelForm" onsubmit="saveDrawerEdit(event)">
+            <input type="hidden" id="editNovelId">
+
+            <div class="form-group">
+                <label for="editTitle" class="form-label">Novel Title</label>
+                <input type="text" id="editTitle" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label for="editReadingStatus" class="form-label">Reading Status</label>
+                <select id="editReadingStatus" class="form-select">
+                    <option value="Currently Reading">Currently Reading</option>
+                    <option value="Moodbound">Moodbound</option>
+                    <option value="Plan to Read">Plan to Read</option>
+                    <option value="Already Read">Already Read</option>
+                    <option value="Unassigned">Unassigned</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="editTheme" class="form-label">Theme / Genre</label>
+                <select id="editTheme" class="form-select">
+                    <option value="R-18 / Smut">R-18 / Smut</option>
+                    <option value="Harem">Harem</option>
+                    <option value="Rich Protagonist">Rich Protagonist</option>
+                    <option value="Fast Cultivation">Fast Cultivation</option>
+                    <option value="Romance">Romance</option>
+                    <option value="System / Cheat">System / Cheat</option>
+                    <option value="Normal / Other">Normal / Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Archive Flags</label>
+                <div class="checkbox-stack">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="editIsFavorite">
+                        <span>🌌 Saved Favorite (Immortal Treasury)</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="editIsCompleted">
+                        <span>🏆 Completed (Ascended Legends)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Attached Discovered Sources</label>
+                <div class="drawer-links" id="drawerLinksList"></div>
+            </div>
+
+            <div class="drawer-footer">
+                <button type="submit" class="btn btn-primary btn-block">Save Sovereign Changes</button>
+            </div>
+        </form>
+    </aside>
+
+    <script src="/static/app.js?v=2.1"></script>
+</body>
+</html>

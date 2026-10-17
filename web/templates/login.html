@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | Celestial Sentinel</title>
+    <link rel="stylesheet" href="/static/style.css?v=2.1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="auth-page">
+    <main class="auth-container">
+        <div class="auth-card">
+            <header class="auth-header">
+                <div class="brand-crest" aria-hidden="true">🌌</div>
+                <h1 class="brand-title">Celestial Sentinel</h1>
+                <p class="brand-subtitle">Private Novel Archive &amp; Provisioning Studio</p>
+            </header>
+
+            {% if error %}
+            <div class="alert alert-danger" role="alert">
+                <span class="alert-icon" aria-hidden="true">⚠️</span>
+                <span class="alert-message">{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form method="POST" action="/login" class="auth-form" id="loginForm" novalidate>
+                <div class="form-group">
+                    <label for="passwordInput" class="form-label">Sovereign Access Key</label>
+                    <div class="input-password-wrapper">
+                        <input 
+                            type="password" 
+                            id="passwordInput" 
+                            name="password" 
+                            class="form-control"
+                            placeholder="Enter sovereign key..." 
+                            required 
+                            autofocus 
+                            autocomplete="current-password"
+                            spellcheck="false"
+                        >
+                        <button type="button" class="btn-toggle-pw" id="togglePwBtn" aria-label="Toggle password visibility">
+                            👁️
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+                    <span class="btn-text">Authenticate Sovereign</span>
+                    <span class="btn-spinner" style="display: none;" aria-hidden="true">
+                        <span class="spinner-sm"></span> Verifying Key...
+                    </span>
+                </button>
+            </form>
+
+            <footer class="auth-footer">
+                <span>Restricted Access • Whitelisted Personnel Only</span>
+            </footer>
+        </div>
+    </main>
+
+    <script>
+        const toggleBtn = document.getElementById('togglePwBtn');
+        const pwInput = document.getElementById('passwordInput');
+        const form = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = pwInput.type === 'password';
+            pwInput.type = isPassword ? 'text' : 'password';
+            toggleBtn.textContent = isPassword ? '🙈' : '👁️';
+            pwInput.focus();
+        });
+
+        form.addEventListener('submit', (e) => {
+            if (!pwInput.value.trim()) {
+                e.preventDefault();
+                pwInput.focus();
+                return;
+            }
+            submitBtn.disabled = true;
+            submitBtn.querySelector('.btn-text').style.display = 'none';
+            submitBtn.querySelector('.btn-spinner').style.display = 'inline-flex';
+        });
+    </script>
+</body>
+</html>
