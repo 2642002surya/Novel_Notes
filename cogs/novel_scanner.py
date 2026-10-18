@@ -101,7 +101,6 @@ class PaginatedNovelClusterView(discord.ui.View):
                 inline=False
             )
 
-        # Determine the latest chapter across the cluster
         max_ch = max((item.chapter_num for item in self.items), default=-1.0)
 
         for i, item in enumerate(page_items, start=1):
@@ -237,7 +236,6 @@ class PaginatedNovelClusterView(discord.ui.View):
 
         await interaction.response.defer(ephemeral=True)
 
-        # Smart sorting: highest chapter first; fallback to newest post timestamp
         sorted_items = sorted(
             self.items, 
             key=lambda it: (it.chapter_num, it.created_at.timestamp()), 
@@ -265,13 +263,8 @@ class PaginatedNovelClusterView(discord.ui.View):
                 except Exception:
                     failed_count += 1
 
-        self.items = [keep_item] + [item for item in to_delete if item.is_protected]
-        self.total_pages = math.ceil(len(self.items) / self.PAGE_SIZE)
-        self.current_page = 0
-        self.rebuild_ui()
-
         ch_info = f" (Chapter {keep_item.chapter_num:g})" if keep_item.chapter_num != -1.0 else ""
-        desc = f"Smart sweep finished!\n• Kept newest/latest link{ch_info} in <#{keep_item.channel_id}>.\n• Deleted **{deleted_count}** older duplicates."
+        desc = f"Smart sweep finished for **{self.novel_title}**!\n• Kept newest/latest link{ch_info} in <#{keep_item.channel_id}>.\n• Deleted **{deleted_count}** older duplicates."
         if protected_skipped:
             desc += f"\n• 🛡️ Preserved **{protected_skipped}** links inside protected categories."
 
@@ -280,7 +273,13 @@ class PaginatedNovelClusterView(discord.ui.View):
             description=desc,
             color=COLOR_SUCCESS
         )
-        await interaction.message.edit(embed=self.create_embed(), view=self)
+
+        # Delete the duplicate alert embed entirely from the alert channel
+        try:
+            await interaction.message.delete()
+        except discord.HTTPException:
+            pass
+
         await interaction.followup.send(embed=finish_embed, ephemeral=True)
 
 class DeleteButton(discord.ui.Button):
@@ -314,21 +313,23 @@ class DeleteButton(discord.ui.Button):
         try:
             target_msg = await channel.fetch_message(self.item.message_id)
             await target_msg.delete()
-            self.disabled = True
-            self.label = f"Deleted {self.display_num}"
-            self.style = discord.ButtonStyle.secondary
-            await interaction.response.edit_message(view=self.parent_view)
-            await interaction.followup.send(f"Deleted post #{self.display_num} from <#{self.item.channel_id}>.", ephemeral=True)
         except discord.NotFound:
-            self.disabled = True
-            self.label = f"Gone #{self.display_num}"
-            self.style = discord.ButtonStyle.secondary
-            await interaction.response.edit_message(view=self.parent_view)
-            await interaction.followup.send("Message was already removed.", ephemeral=True)
+            pass
         except discord.Forbidden:
-            await interaction.response.send_message("Missing bot permissions to delete message.", ephemeral=True)
+            return await interaction.response.send_message("Missing bot permissions to delete message.", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+            return await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+
+        # Delete the bot alert embed after single link deletion
+        try:
+            await interaction.message.delete()
+        except discord.HTTPException:
+            pass
+
+        await interaction.response.send_message(
+            f"✅ Deleted post #{self.display_num} from <#{self.item.channel_id}> and removed alert embed.",
+            ephemeral=True
+        )
 
 class NovelScanner(commands.Cog, name="Novel Scanner"):
     def __init__(self, bot: commands.Bot):
@@ -364,7 +365,6 @@ class NovelScanner(commands.Cog, name="Novel Scanner"):
 
     @scheduled_scan_cycle.before_loop
     async def before_scheduled_scan(self):
-        # Waits until bot is logged in. No initial startup scan is performed.
         await self.bot.wait_until_ready()
 
     def render_progress_bar(self, percentage: float, length: int = 14) -> str:
@@ -549,7 +549,6 @@ class NovelScanner(commands.Cog, name="Novel Scanner"):
         if message.author.bot or not message.guild:
             return
 
-        # Enforce server restriction
         if not is_guild_allowed(message.guild.id):
             return
 
